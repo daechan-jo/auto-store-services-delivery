@@ -1,0 +1,31 @@
+{
+	"compilerOptions": {
+		"target": "ES2021",
+		"module": "commonjs",
+		"baseUrl": "./",
+		"outDir": "./dist",
+		"incremental": true,
+		"esModuleInterop": true,
+		"declaration": true,
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"allowSyntheticDefaultImports": true,
+		"removeComments": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"strictNullChecks": false, // null, undefined 비허용
+		"noImplicitAny": false, // any 금지
+		//		"strictBindCallApply": false,
+		"forceConsistentCasingInFileNames": true, // 파일 이름 대소문자 일관사용
+		"noFallthroughCasesInSwitch": true // switch에서 case 문이 암묵적으로 다음으로 넘어가는것을 방지
+	},
+	"include": [
+		"src/**/*.ts", // 서비스 소스
+		//		"src/types/global.d.ts",
+	],
+	"exclude": ["node_modules", "dist"],// 빌드에서 제외할 파일
+	"ts-node": {
+		"swc": true
+	}
+}
+
