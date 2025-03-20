@@ -1,4 +1,4 @@
-import { CronType } from '@daechanjo/models';
+import { CronType, DeliveryData } from '@daechanjo/models';
 import { RabbitMQService } from '@daechanjo/rabbitmq';
 import { UtilService } from '@daechanjo/util';
 import { Injectable } from '@nestjs/common';
@@ -19,35 +19,16 @@ export class DeliveryService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  async waybillManagement(cronId: string) {
-    // const lastCronTimeString = await this.redis.get('lastRun:shipping');
-    // let lastCronTime: Date;
-    //
-    // if (lastCronTimeString) {
-    //   lastCronTime = this.utilService.convertKoreaTime(lastCronTimeString);
-    //
-    //   console.log(`${CronType.SHIPPING}${cronId}: 마지막 실행 시간 ${lastCronTime}`);
-    // } else {
-    //   lastCronTime = this.utilService.createYesterdayKoreaTime();
-    //
-    //   console.log(
-    //     `${CronType.SHIPPING}${cronId}: 마지막 실행시간이 없습니다. 24시간 전으로 설정합니다.`,
-    //   );
-    // }
-    //
-    // await this.redis.set(
-    //   'lastRun:shipping',
-    //   moment.tz('Asia/Seoul').subtract(6, 'hours').toISOString(),
-    // );
-
-    const lastCronTime = this.utilService.createYesterdayKoreaTime();
-
-    const onchResults = await this.rabbitmqService.send('onch-queue', 'waybillExtraction', {
-      cronId: cronId,
-      store: this.configService.get<string>('STORE'),
-      lastCronTime: lastCronTime,
-      type: CronType.SHIPPING,
-    });
+  async deliveryManagement(cronId: string) {
+    const onchResults: { status: string; data: DeliveryData[] } = await this.rabbitmqService.send(
+      'onch-queue',
+      'deliveryExtraction',
+      {
+        cronId: cronId,
+        store: this.configService.get<string>('STORE'),
+        type: CronType.SHIPPING,
+      },
+    );
 
     if (!onchResults || !Array.isArray(onchResults.data) || onchResults.data.length === 0) {
       console.log(`${CronType.SHIPPING}${cronId}: 새로 등록된 운송장이 없습니다.`);
@@ -66,15 +47,18 @@ export class DeliveryService {
         cronId: cronId,
         type: CronType.SHIPPING,
         status: 'INSTRUCT',
-        vendorId: this.configService.get<string>('L_COUPANG_VENDOR_ID'),
+        vendorId: this.configService.get<string>('COUPANG_VENDOR_ID'),
         today: today,
         yesterday: thirtyDay,
       },
     );
-
     console.log(`${CronType.SHIPPING}${cronId}: 쿠팡서비스에 "getCoupangOrderList" 메시지 수신`);
-    console.log(`${CronType.SHIPPING}${cronId}: 매치 시작`);
+    if (coupangOrderList.data.length === 0) {
+      console.log(`${CronType.SHIPPING}${cronId}: 현재 주문이 없습니다.`);
+      return;
+    }
 
+    console.log(`${CronType.SHIPPING}${cronId}: 매치 시작`);
     const rowMap = {};
     onchResults.data.forEach((row: any) => {
       const key = `${row.name}-${row.phone}`;
@@ -165,7 +149,7 @@ export class DeliveryService {
       const nowTime = moment().format('HH:mm:ss');
       console.log(`${CronType.SHIPPING}${cronId}-${nowTime}: 운송장 등록 시작`);
 
-      await this.waybillManagement(cronId);
+      await this.deliveryManagement(cronId);
     } catch (error: any) {
       setImmediate(async () => {
         await this.rabbitmqService.emit('mail-queue', 'sendErrorMail', {

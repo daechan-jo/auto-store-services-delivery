@@ -20,7 +20,7 @@
 	},
 	"dependencies": {
 		"@daechanjo/log": "^1.0.0",
-		"@daechanjo/models": "^1.0.3",
+		"@daechanjo/models": "^1.0.18",
 		"@daechanjo/playwright": "^1.2.2",
 		"@daechanjo/rabbitmq": "^1.0.0",
 		"@daechanjo/util": "^1.0.0",

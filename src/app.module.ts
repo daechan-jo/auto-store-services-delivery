@@ -30,9 +30,11 @@ import { DeliveryService } from './core/delivery.service';
   providers: [DeliveryService],
 })
 export class AppModule implements OnApplicationBootstrap {
-  constructor() {}
+  constructor(private readonly deliveryService: DeliveryService) {}
 
   async onApplicationBootstrap() {
-    setTimeout(async () => {});
+    setTimeout(async () => {
+      // await this.deliveryService.deliveryManagement('test');
+    });
   }
 }
