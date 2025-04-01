@@ -1,4 +1,4 @@
-import { CronType, DeliveryData } from '@daechanjo/models';
+import { CoupangOrderInfo, CronType, DeliveryData, InvoiceUploadResult } from '@daechanjo/models';
 import { RabbitMQService } from '@daechanjo/rabbitmq';
 import { UtilService } from '@daechanjo/util';
 import { Injectable } from '@nestjs/common';
@@ -39,38 +39,55 @@ export class DeliveryService {
     const today = moment().format('YYYY-MM-DD');
     const thirtyDay = moment().subtract(30, 'days').format('YYYY-MM-DD');
 
-    console.log(`${CronType.SHIPPING}${cronId}: 쿠팡서비스에 "getCoupangOrderList" 메시지 송신`);
-    const coupangOrderList = await this.rabbitmqService.send(
-      'coupang-queue',
-      'getCoupangOrderList',
-      {
+    // api로 조회한거랑 웹상에서 네트워크요청 캡쳐한거랑 shipmentBoxId 가 다름.. 뭐야?
+    // 909295085462491100
+    // [
+    // 	{
+    // 		"orderId": 25100104633733,
+    // 		"shipmentBoxId": 909295085462491137,
+    // 		"success": true,
+    // 		"errorKey": null,
+    // 		"errorMessage": null,
+    // 		"splitItems": null
+    // 	}
+    // ]
+
+    //
+    // https://wing.coupang.com/tenants/sfl-portal/delivery/management/dashboard/
+    // search?condition=%7B%22nextShipmentBoxId%22%3Anull%2C%22startDate%22%3A%222025-03-01%22%2C%22endDate%22%3A%222025-03-31%22%2C%22deliveryStatus%22%3A%22DEPARTURE%22%2C%22deliveryMethod%22%3Anull%2C%22detailConditionKey%22%3A%22NAME%22%2C%22detailConditionValue%22%3Anull%2C%22selectedComplexConditionKey%22%3Anull%2C%22deliverCode%22%3Anull%2C%22storePickupStatus%22%3Anull%2C%22isEsdToday%22%3Afalse%2C%22isEsdIn5d%22%3Afalse%2C%22countPerPage%22%3A10%2C%22page%22%3A1%2C%22shipmentType%22%3Anull%7D&mockingTestMode=false
+    // 이걸 캡쳐하던가
+    // https://wing.coupang.com/tenants/sfl-portal/delivery/management/dashboard/
+    // search?condition=%7B%22nextShipmentBoxId%22%3Anull%2C%22startDate%22%3A%222025-03-01%22%2C%22endDate%22%3A%222025-03-31%22%2C%22deliveryStatus%22%3A%22INSTRUCT%22%2C%22deliveryMethod%22%3Anull%2C%22detailConditionKey%22%3A%22NAME%22%2C%22detailConditionValue%22%3Anull%2C%22selectedComplexConditionKey%22%3Anull%2C%22deliverCode%22%3Anull%2C%22storePickupStatus%22%3Anull%2C%22isEsdToday%22%3Afalse%2C%22isEsdIn5d%22%3Afalse%2C%22countPerPage%22%3A10%2C%22page%22%3A2%2C%22shipmentType%22%3Anull%7D&mockingTestMode=false
+
+    const coupangOrderList: { status: string; data: CoupangOrderInfo[] } =
+      await this.rabbitmqService.send('coupang-queue', 'getCoupangOrderList', {
         cronId: cronId,
         type: CronType.SHIPPING,
-        status: 'INSTRUCT',
+        // INSTRUCT | DEPARTURE
+        status: 'DEPARTURE',
         vendorId: this.configService.get<string>('COUPANG_VENDOR_ID'),
         today: today,
         yesterday: thirtyDay,
-      },
-    );
-    console.log(`${CronType.SHIPPING}${cronId}: 쿠팡서비스에 "getCoupangOrderList" 메시지 수신`);
+      });
+
     if (coupangOrderList.data.length === 0) {
       console.log(`${CronType.SHIPPING}${cronId}: 현재 주문이 없습니다.`);
       return;
     }
 
     console.log(`${CronType.SHIPPING}${cronId}: 매치 시작`);
-    const rowMap = {};
-    onchResults.data.forEach((row: any) => {
-      const key = `${row.name}-${row.phone}`;
+    const rowMap: Record<string, DeliveryData> = {};
+    onchResults.data.forEach((row: DeliveryData) => {
+      const key = `${row.nameText}-${row.phoneText}`;
       rowMap[key] = row;
     });
 
     const matchedOrders = coupangOrderList.data
-      .filter((order: any) => {
+      .filter((order: CoupangOrderInfo) => {
         const key = `${order.receiver.name}-${order.receiver.safeNumber}`;
         return rowMap[key] !== undefined;
       })
-      .map((order: any) => {
+      .map((order: CoupangOrderInfo) => {
         const key = `${order.receiver.name}-${order.receiver.safeNumber}`;
         return {
           ...order,
@@ -79,7 +96,7 @@ export class DeliveryService {
       });
 
     if (matchedOrders.length > 0) {
-      const updatedOrders = matchedOrders.map((order: any) => {
+      const updatedOrders = matchedOrders.map((order) => {
         if (order.courier.courier === '경동화물') order.courier.courier = '경동택배';
         const courierName = order.courier.courier;
         const deliveryCompanyCode = courierCode[courierName] || 'DIRECT';
@@ -91,11 +108,12 @@ export class DeliveryService {
         };
       });
 
-      const results = await this.rabbitmqService.send('coupang-queue', 'invoiceUpload', {
-        cronId: cronId,
-        updatedOrders: updatedOrders,
-        type: CronType.SHIPPING,
-      });
+      const results: { status: string; data: InvoiceUploadResult[] } =
+        await this.rabbitmqService.send('coupang-queue', 'uploadInvoices', {
+          cronId: cronId,
+          type: CronType.SHIPPING,
+          invoices: updatedOrders,
+        });
 
       console.log(`${CronType.SHIPPING}${cronId}: 운송장 자동등록 결과`, results.data);
 
@@ -142,7 +160,7 @@ export class DeliveryService {
     }
   }
 
-  @Cron('0 */10 * * * *')
+  @Cron('0 */30 * * * *')
   async shippingCron() {
     const cronId = this.utilService.generateCronId();
     try {
