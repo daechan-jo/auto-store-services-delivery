@@ -34,7 +34,7 @@ export class AppModule implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     setTimeout(async () => {
-      // await this.deliveryService.shippingCron();
+      await this.deliveryService.shippingCron();
     });
   }
 }
