@@ -63,17 +63,17 @@ export class DeliveryService {
 
     const rowMap: Record<string, DeliveryData> = {};
     onchResults.data.forEach((row: DeliveryData) => {
-      const key = `${row.nameText}-${row.phoneText.replace(/[^0-9]/g, '')}`;
+      const key = `${row.nameText.replace(/\s/g, '')}-${row.phoneText.replace(/[^0-9]/g, '')}`;
       rowMap[key] = row;
     });
 
     const matchedOrders = newOrders
       .filter((order) => {
-        const key = `${order.receiverName}-${order.receiverMobile.replace(/[^0-9]/g, '')}`;
+        const key = `${order.receiverName.replace(/\s/g, '')}-${order.receiverMobile.replace(/[^0-9]/g, '')}`;
         return rowMap[key] !== undefined;
       })
       .map((order) => {
-        const key = `${order.receiverName}-${order.receiverMobile.replace(/[^0-9]/g, '')}`;
+        const key = `${order.receiverName.replace(/\s/g, '')}-${order.receiverMobile.replace(/[^0-9]/g, '')}`;
         return {
           ...order,
           courier: rowMap[key],

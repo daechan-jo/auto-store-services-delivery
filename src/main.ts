@@ -7,14 +7,17 @@ import * as dotenv from 'dotenv';
 import { initializeTransactionalContext } from 'typeorm-transactional';
 
 import { AppModule } from './app.module';
+import { AppConfig } from './config/app.config';
 
 dotenv.config({
   path: '/Users/daechanjo/codes/project/auto-store/.env',
 });
 
 async function bootstrap() {
+  const appConfig = AppConfig.getInstance();
+  appConfig.appName = 'Delivery';
   initializeTransactionalContext();
-  setupGlobalConsoleLogging();
+  setupGlobalConsoleLogging({ appName: appConfig.appName });
 
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
     transport: Transport.RMQ,
